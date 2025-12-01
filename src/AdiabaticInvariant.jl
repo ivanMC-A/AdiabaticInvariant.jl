@@ -61,7 +61,7 @@ function evalFS(coef::AbstractArray, x::Float64, L::Float64)
     else
         return error("Length of coef::AbstractArray is not even. coef most be an even array")
 
-
+    end
     θ = 2*π*x/L
 
     
@@ -96,7 +96,7 @@ function evalDFS(coef::AbstractArray, x::Float64, L::Float64)
     else
         return error("Length of coef::AbstractArray is not even. coef most be an even array")
 
-
+    end
     θ = 2*π*x/L
 
     
@@ -141,4 +141,4 @@ function deval(J::SlabJ,x)
 
 end
 
-end # module
+end # moduleS
