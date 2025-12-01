@@ -3,7 +3,13 @@ uuid = "0e556e56-5d18-4166-9970-24ffe1271c72"
 authors = ["Ivan Maldonado <iam2395@eid.utexas.edu>"]
 version = "1.0.0-DEV"
 
+[deps]
+FourierSeries = "91b0b092-f7f9-44d0-82ad-103031573311"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+
 [compat]
+FourierSeries = "0.2.4"
+LinearAlgebra = "1.11.0"
 julia = "1.6.7"
 
 [extras]

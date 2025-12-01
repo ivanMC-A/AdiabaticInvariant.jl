@@ -1,31 +1,31 @@
 module AdiabaticInvariant
-export AdiabaticInvariant, SlabJ, evaluate, deval
+export JInvariant, SlabJ, evaluate, deval
 
-using LinearAlgebra
+using LinearAlgebra, FourierSeries
 
 # -----------------------------------------------
 # Definitions
 # -----------------------------------------------
 
 """
-    abstract type AdiabaticInvariant end
+    abstract type JInvariant end
 
         Parent type for all adiabatic invariant representations.
 
 """
 
-abstract type AdiabaticInvariant end
+abstract type JInvariant end
 
 """
 
-    struct SlabJ <: AdiabaticInvariant
+    struct SlabJ <: JInvariant
 
         Spectral representations (coefficients) of an adiabatic invariant.
         a: Array containing Spectral coefficients.
 
 """
 
-struct SlabJ <: AdiabaticInvariant
+struct SlabJ <: JInvariant
 
     a::AbstractArray
 
@@ -44,9 +44,13 @@ end
 
 
 """
-    evaluate(J::SlabJ,x)
+# Function call
 
-        Evaluate adiabatic invariant 'J' at a point 'x'.
+'evaluate(J,fabx,faby,chev,x)'
+
+# Description
+
+Evaluate adiabatic invariant 'J' at a point 'x'.
 
 """
 
