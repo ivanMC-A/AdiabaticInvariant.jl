@@ -48,7 +48,7 @@ Reconstructs, in a domain L, and evaluates, at a point x ∈ L, a function f bas
 should be of length N*2 and coef[N + 1] = 0 which corresponds to b0 = 0.
 """
 
-function evalFS(coef::AbstractArray, x::Float64, L::Float64)
+function evalFS(coef::AbstractArray, x::Number, L::Float64)
 
     n_dims = ndims(coef)
 
@@ -57,7 +57,7 @@ function evalFS(coef::AbstractArray, x::Float64, L::Float64)
     end
 
     if iseven(length(coef))
-        N = length(coef)/2
+        N = length(coef) ÷ 2
     else
         return error("Length of coef::AbstractArray is not even. coef most be an even array")
 
@@ -66,11 +66,12 @@ function evalFS(coef::AbstractArray, x::Float64, L::Float64)
 
     
     f = 0
-    for i in range(start = 0, stop = N)
+    for i in range(start = 0, stop = N-1)
         if i == 0
             f += coef[i + 1]
+        else
+            f += coef[i + 1]*cos(i*θ) + coef[i + N + 1]*sin(i*θ)
         end
-        f += coef[i + 1]*sin(i*θ) + coef[i + N + 1]*cos(i*θ)
     end
     return f
 end
@@ -105,7 +106,7 @@ function evalDFS(coef::AbstractArray, x::Float64, L::Float64)
         if i == 0
             f += 0
         end
-        f += 2*π/L*coef[i + 1]*cos(i*θ) - 2*π/L*coef[i + N + 1]*sin(i*θ)
+        f += -2*π/L*coef[i + 1]*sin(i*θ) + 2*π/L*coef[i + N + 1]*cos(i*θ)
     end
     return f
 end
