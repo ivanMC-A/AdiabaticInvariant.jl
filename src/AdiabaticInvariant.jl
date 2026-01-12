@@ -48,13 +48,7 @@ Reconstructs, in a domain L, and evaluates, at a point x ∈ L, a function f bas
 should be of length N*2 and coef[N + 1] = 0 which corresponds to b0 = 0.
 """
 
-function evalFS(coef::AbstractArray, x::Number, L::Float64)
-
-    n_dims = ndims(coef)
-
-    if n_dims > 1
-        return error("coef::AbstractArray dimention is bigger than 1. coef must be a 1D array")
-    end
+function evalFS(coef::AbstractVector, x::Number, L::Float64)
 
     if iseven(length(coef))
         N = length(coef) ÷ 2
