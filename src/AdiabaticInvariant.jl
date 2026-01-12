@@ -142,6 +142,43 @@ function deval(J::SlabJ,x)
 
 end
 
+###### Fourier Stuff
+
+"""
+    function fourA(N::Integer)
+
+Construct the Fourier matrix evaluated at equidistant points.
+
+"""
+
+function fourA(N::Integer)
+    A = zeros(ComplexF64,N,N)
+    M = Int((N-1)/2)
+    for m in -M:M
+        for n in 0:(N-1)
+            A[m + M + 1,n + 1] = exp(im*(2*π*m*n)/(N))
+        end
+    end
+    return A
+end
+
+"""
+    function getChebCoef(N::Number, FN::AbstractArray)
+
+Compute Chebyshev polynomial coefficients from function evaluated at Chebyshev points.
+
+"""
+
+function getFourCoef(N::Number, FN::AbstractArray)
+    A = fourA(N)
+    At = A'
+    W = At * A
+    b = At * FN
+    x = W \ b
+    return x
+end
+
+
 ###### Chebyshev stuff
 
 """
