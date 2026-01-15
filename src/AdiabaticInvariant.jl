@@ -45,26 +45,18 @@ end
     evalFS(coef::AbstractArray)
 
 Reconstructs, in a domain L, and evaluates, at a point x ∈ L, a function f based on its fourier coefficients (coef). The coef
-should be of length N*2 and coef[N + 1] = 0 which corresponds to b0 = 0.
+The first coefficients correspond to a_n and the last coefficients correspond to b_n
 """
 
 function evalFS(coef::AbstractVector, x::Number, L::Float64)
-
-    if iseven(length(coef))
-        N = length(coef) ÷ 2
-    else
-        return error("Length of coef::AbstractArray is not even. coef most be an even array")
-
-    end
     θ = 2*π*x/L
-
-    
+    N = length(coef)
     f = 0
-    for i in range(start = 0, stop = N-1)
+    for i in 0:Int(N/2 - 1/2)
         if i == 0
             f += coef[i + 1]
         else
-            f += coef[i + 1]*cos(i*θ) + coef[i + N + 1]*sin(i*θ)
+            f += coef[i + 1]*cos(i*θ) + coef[i + Int(N/2 + 1/2)]*sin(i*θ)
         end
     end
     return f
@@ -78,29 +70,15 @@ Reconstructs (in a domain L) and evaluates (at a point x ∈ L) the derivative o
 should be of length N*2 and coef[N + 1] = 0 which corresponds to b0 = 0.
 """
 
-function evalDFS(coef::AbstractArray, x::Float64, L::Float64)
-
-    n_dims = ndims(coef)
-
-    if n_dims > 1
-        return error("coef::AbstractArray dimention is bigger than 1. coef must be a 1D array")
-    end
-
-    if iseven(length(coef))
-        N = length(coef)/2
-    else
-        return error("Length of coef::AbstractArray is not even. coef most be an even array")
-
-    end
+function evalDFS(coef::AbstractVector, x::Float64, L::Float64)
     θ = 2*π*x/L
-
-    
+    N = length(coef)
     f = 0
-    for i in range(start = 0, stop = N)
+    for i in 0:Int(N/2 - 1/2)
         if i == 0
             f += 0
         end
-        f += -2*π/L*coef[i + 1]*sin(i*θ) + 2*π/L*coef[i + N + 1]*cos(i*θ)
+        f += -2*π *i/L*coef[i + 1]*sin(i*θ) + 2*π*i/L*coef[i + Int(N/2 + 1/2)]*cos(i*θ)
     end
     return f
 end
