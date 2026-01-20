@@ -89,3 +89,12 @@ dfb(x) = 1
 dfberr = contErr(dfb,dfbr,xs)
 
 plot(xs[100:400],dfberr[100:400])
+
+# I have a doubt on the generation of chebyshev points of the first kind. How does the
+# indexing changes if I change "cos((k + 0.5)*π/N)" for "cos(-(k + 0.5)*π/N)". Here chept1stMax
+# has the modification and it doesn't change the order (increasing) of the numbers. It's
+# still decreasing. So here, we have to do the following: We let "x[k+1] = -cos((k + 0.5)*π/N)".
+# This does generates an increasing order of point.
+x1 = chept1st(10)
+x2 = chept1stMax(10)
+
