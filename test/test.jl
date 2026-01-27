@@ -1,5 +1,6 @@
 using AdiabaticInvariant
 using Plots
+using LinearAlgebra
 
 # I'm going to test reconstructing several functions for my fourier reconstruction func.
 
@@ -97,4 +98,62 @@ plot(xs[100:400],dfberr[100:400])
 # This does generates an increasing order of point.
 x1 = chept1st(10)
 x2 = chept1stMax(10)
+
+
+using LinearAlgebra
+
+N = 30
+A = chebA(N)
+
+f = randn(N)
+
+# Normal equations
+x_ne = (A' * A) \ (A' * f)
+
+# QR
+F = qr(A)
+x_qr = F \ f
+
+# Compare residuals
+r_ne = norm(A * x_ne - f)
+r_qr = norm(A * x_qr - f)
+
+# Compare conditioning
+κA = cond(A)
+κATA = cond(A' * A)
+
+κA, κATA, r_ne, r_qr
+
+function mfield(r)
+    B = [0,0,1 + 0.03*cos(3*r[1] + 1*r[2]) + 0.03*cos(1*r[1] + 3*r[2])]
+    return B
+end
+
+hey = get_FFO(0.27,mfield)
+v0 = sqrt(2)/0.27
+u0 = [2.5,3,0,v0,0,0]
+
+a,b = hey(u0)
+hola = a[4:6,1:2]
+
+hola[:,1]
+
+# Is energy being conserved?
+function get_energy(u::AbstractVector,ϵ::Float64)
+    vx, vy, vz = u[4], u[5], u[6]
+    println(typeof(vx))
+    println(vx)
+    # (vx^2 + vy^2 + vz^2)
+    return (0.5 * ϵ^2 * (vx^2 + vy^2 + vz^2))
+end
+energy = [get_energy(a[i],0.27) for i in 1:size(a)[2]]
+e0 = energy[1]
+energy = energy .- e0
+plot(a.t,energy)
+
+size(a)
+
+for u in a
+    println(u)
+end
 

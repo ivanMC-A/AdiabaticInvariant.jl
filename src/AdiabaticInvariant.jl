@@ -1,7 +1,8 @@
 module AdiabaticInvariant
-export JInvariant, SlabJ, evaluate, deval, fourierFunc, chebA, fourA
+export JInvariant, SlabJ, evaluate, deval, fourierFunc, chebA, fourA, get_FFO
 
 using LinearAlgebra
+using DifferentialEquations
 
 # -----------------------------------------------
 # Definitions
@@ -202,7 +203,7 @@ Given a number 'N' and a kind 'k', this function calculates the N or N+1 Chebysh
 of the first kind k = 'F' or second kind k = 'S'. 
 """
 
-function chept(N::Number; lobatto::Bool = True)
+function chept(N::Number; lobatto::Bool = true)
 
     if lobatto
         return chept2nd(N)
@@ -257,9 +258,33 @@ end
 
 ###### Trajectories stuff
 
-function get_FFO(ϵ::Float64,B::Function)
-    
-    return (x) -> (ϕFOT(x),T)
+function get_FFO(ϵ::Float64,B::Function; tmax = 1e3,  solver=Tsit5(), psec = true)
+
+    # Creating differential equation to solve
+    function f!(du,u,p,t)
+        # u₁ = x, u₂ = y, # u₃ = z
+        # u₄ = vₓ, u₅ = v\_y, u₆ = v\_z
+        du[1] = ϵ * u[4]
+        du[2] = ϵ * u[5]
+        du[3] = ϵ * u[6]
+        du[4] = u[5]*B(u)[3] - u[6]*B(u)[2] 
+        du[5] = -(u[4]*B(u)[3] - u[6]*B(u)[1])
+        du[6] = u[4]*B(u)[2] - u[5]*B(u)[1]
+    end
+
+    if psec
+            # Write conditioning
+        end
+
+
+    function FFO(u0::AbstractArray; p = nothing)
+        prob = ODEProblem(f!,u0, (0.0, tmax), p)
+        sol = solve(prob, solver)
+        return sol, sol.t[end]
+
+    end
+
+    return FFO
 end
 
 end # module
