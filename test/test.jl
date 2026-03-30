@@ -124,13 +124,18 @@ r_qr = norm(A * x_qr - f)
 
 κA, κATA, r_ne, r_qr
 
-function mfield(r)
-    B = [0,0,1 + 0.03*cos(3*r[1] + 1*r[2]) + 0.03*cos(1*r[1] + 3*r[2])]
-    return B
+function mfield(r;scalar = true)
+    if scalar
+        return 1 + 0.03*cos(3*r[1] + 1*r[2]) + 0.03*cos(1*r[1] + 3*r[2])
+    else
+        return [0,0,1 + 0.03*cos(3*r[1] + 1*r[2]) + 0.03*cos(1*r[1] + 3*r[2])]
+    end
 end
 
-hey = get_FFO(0.27,mfield)
-v0 = sqrt(2)/0.27
+ϵ = 0.001
+
+hey = get_FFO(ϵ,mfield; tmax = 1e3)
+v0 = sqrt(2)/ϵ
 u0 = [2.5,3,0,v0,0,0]
 
 a,b = hey(u0)
@@ -149,7 +154,7 @@ end
 energy = [get_energy(a[i],0.27) for i in 1:size(a)[2]]
 e0 = energy[1]
 energy = energy .- e0
-plot(a.t,energy)
+plot(a.t[1:200],a[4,1:200])
 
 size(a)
 
@@ -157,3 +162,28 @@ for u in a
     println(u)
 end
 
+
+
+# Constructing j
+
+# Getting points
+# setting boundaries
+bd = tuple(1,5,1,5,20,30)
+
+# now, we get our points
+x,y,r = get_points(20)
+
+gx,gy,gR = trans_pts(x,y,r,bd)
+
+# Now we create a function for J
+# First, we need a magnetic field
+
+Bz = x -> mfield(x)
+
+# We also need derivatives
+
+∇Bz, HBz = deriv_B(Bz)
+
+J0 = x -> perturvedJ(Bz,x)
+J1 = x -> perturvedJ(ϵ,Bz,∇Bz,x)
+J2 = x -> perturvedJ(ϵ,Bz,∇Bz,HBz,x)
