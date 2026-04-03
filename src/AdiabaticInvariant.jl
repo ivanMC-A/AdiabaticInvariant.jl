@@ -608,58 +608,38 @@ function get_FFO(ϵ::Float64,B::Function; tmax = 1e3,  solver=Tsit5(), psec = tr
     function f!(du,u,p,t)
         # u₁ = x, u₂ = y, # u₃ = z
         # u₄ = vₓ, u₅ = v\_y, u₆ = v\_z
+        b = B(u)
         du[1] = ϵ * u[4]
         du[2] = ϵ * u[5]
         du[3] = ϵ * u[6]
-        du[4] = u[5]*B(u)[3] - u[6]*B(u)[2] 
-        du[5] = -(u[4]*B(u)[3] - u[6]*B(u)[1])
-        du[6] = u[4]*B(u)[2] - u[5]*B(u)[1]
+        du[4] = u[5]*b[3] - u[6]*b[2]
+        du[5] = -(u[4]*b[3] - u[6]*b[1])
+        du[6] = u[4]*b[2] - u[5]*b[1]
     end
 
     function affect!(integrator)
-        u = integrator.u
-        vx = u[4]
-        vy = u[5]
-        if abs(vy) < 1e-5 && vx > 0
+        if integrator.t > 0 && integrator.u[4] > 0
             terminate!(integrator)
-        end 
-    end
-
-    function affect1!(integrator)
-        integrator.u[1] = mod(integrator.u[1], 2π)
-    end
-
-    function affect2!(integrator)
-        integrator.u[1] = mod(integrator.u[1], 2π)
+        end
     end
 
 
     if psec
-            condition(u, t, integrator) = u[5]
+            condition(u, t, integrator) = u[5]   # vy = 0
 
             cb = ContinuousCallback(condition,affect!)
-
-            condition1(u,t,integrator) = u[1] - 2π
-
-            cb1 = ContinuousCallback(condition1, affect1!)
-
-            condition2(u,t,integrator) = u[1] - 2π
-
-            cb2 = ContinuousCallback(condition2, affect2!)
-
-            cbs = CallbackSet(cb, cb1, cb2)
     end
 
 
-    function FFO(u0::AbstractArray; p = nothing, abstol=1e-10, reltol=1e-10)
+    function FFO(u0::AbstractArray; p = nothing, abstol=1e-15, reltol=1e-15)
         prob = ODEProblem(f!,u0, (0.0, tmax), p)
         if psec
-            sol = solve(prob, solver; callback = cbs, abstol = abstol, reltol = reltol)
+            sol = solve(prob, solver; callback = cb, abstol = abstol, reltol = reltol)
         else
             sol = solve(prob, solver; abstol = abstol, reltol = reltol)
         end
 
-        return sol, sol.t[end]
+        return sol, sol.t[end], sol.t[1:end-1]
 
     end
 
