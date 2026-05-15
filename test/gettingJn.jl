@@ -56,7 +56,7 @@ Bz = x -> mfield(x)
 
 J = slabJ(Nx, Ny, Nr, x1i, x1f, x2i, x2f, x3i, x3f, ϵ, Bz)
 
-x0, y0, r0 = 0.0, 0.0, 14.0
+x0, y0, r0 = π, π, 14.0
 
 JJ = full_J(J.ϵ, J.B)
 
@@ -97,26 +97,31 @@ Erryr = [ErrX(y,r,ptsx) for y in xs, r in rs]
 Errxr = [ErrY(x,r,ptsy) for x in xs, r in rs]
 Errxy = [ErrR(x,y,ptsz) for x in xs, y in ys]
 ## plots
-fig = Figure()
-ax = Axis(fig[1,1][1,1], title = "Error in x-y plane at r = $r0", xlabel = "x", ylabel = "y")
-hm = heatmap!(ax, xs, ys, log10.(Errxy))
-Colorbar(fig[1, 1][1, 2], hm)
 
-ax = Axis(fig[1, 2][1, 1], title = "Error in x-r plane at y = $y0", xlabel = "x", ylabel = "r")
-hm = heatmap!(ax, xs, rs, log10.(Errxr))
-Colorbar(fig[1, 2][1, 2], hm)
+with_theme(theme_latexfonts()) do
+    fig = Figure()
 
-ax = Axis(fig[2, 2][1, 1], title = "Error in y-r plane at x = $x0", xlabel = "y", ylabel = "r")
-hm = heatmap!(ax, ys, rs, log10.(Erryr))
-Colorbar(fig[2, 2][1, 2], hm)
+    ax = Axis(fig[1,1][1,1], title = L"$X-Y$ plane at $r = $%$r0", xlabel = "X", ylabel = L"Y")
+    hm = heatmap!(ax, xs, ys, log10.(Errxy))
+    Colorbar(fig[1, 1][1, 2], hm)
 
-fig
+    ax = Axis(fig[1, 2][1, 1], title = L"$X-r$ plane at $y = $%$y0", xlabel = "X", ylabel = "r")
+    hm = heatmap!(ax, xs, rs, log10.(Errxr))
+    Colorbar(fig[1, 2][1, 2], hm)
+
+    ax = Axis(fig[2, 2][1, 1], title = L"$Y-r$ plane at $x = $%$x0", xlabel = "Y", ylabel = "r")
+    hm = heatmap!(ax, ys, rs, log10.(Erryr))
+    Colorbar(fig[2, 2][1, 2], hm)
+
+    fig
+    save(filename, fig)
+end
 ##
 timestamp = Dates.format(now(), "yyyy-mm-dd_HH-MM-SS")
 filename = "image_$timestamp.png"
 
 filepath = joinpath(folder, filename)
-save(filepath, fig)
+save(filename, fig)
 # Trying for a simpler funciton
 
 x1it, x1ft = 0.0, 2π

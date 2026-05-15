@@ -1,5 +1,5 @@
 module AdiabaticInvariant
-export JInvariant, slabJ, evaluate, full_J, get_eval_points, deval, numN, numNt, denomD,get_FFO
+export JInvariant, slabJ, evaluate, full_J, get_eval_points, deval, numN, numNt, denomD,get_FFO, J_Dinamics, get_FGC
 using OMEinsum
 using LinearAlgebra
 using DifferentialEquations
@@ -59,7 +59,7 @@ end
 """
 # Function call
 
-'evaluate(J,fabx,faby,chev,x)'
+'evaluate(J::SlabJ,x::Vecotr)'
 
 # Description
 
@@ -128,8 +128,8 @@ function numN(J::SlabJ,x)
 
     jx = ein"i,j,k->ijk"(dvx,vy,vr)
     jy = ein"i,j,k->ijk"(vx,dvy,vr)
-    U = -J.ϵ^2*jy
-    V = J.ϵ^2*jx
+    U = J.ϵ^2*jy
+    V = -J.ϵ^2*jx
     return cat(reshape(U, 1, size(U)...), reshape(V, 1, size(V)...); dims=1)
 end
 
@@ -144,6 +144,12 @@ function denomD(J::SlabJ,x)
     jy = ein"i,j,k->ijk"(vx,dvy,vr)
     jr = ein"i,j,k->ijk"(vx,vy,dvr)
     return J.B(x)/x[3] * (jr + J.ϵ*J.B(x)^(-1)*jy)
+end
+
+function J_Dinamics(J::SlabJ)
+    N = x-> numN(J,x)
+    D = x -> denomD(J,x)
+    return N,D
 end
 
 function deriv_B(B)
@@ -602,7 +608,12 @@ end
 
 ###### Trajectories stuff
 
-function get_FFO(ϵ::Float64,B::Function; tmax = 1e3,  solver=Tsit5(), psec = true)
+"""
+    get_FFO(ϵ::Float64,B::Function; tmax = 1e3,  solver=Tsit5(), psec = true)
+    Gives back the evolution map until first point of intersection with Poincaree surface
+    for some initial conditions x0
+"""
+function get_FFO(ϵ::Float64,B::Function; tmax = 1e3,  solver=Vern9(), psec = true)
 
     # Creating differential equation to solve
     function f!(du,u,p,t)
@@ -646,4 +657,116 @@ function get_FFO(ϵ::Float64,B::Function; tmax = 1e3,  solver=Tsit5(), psec = tr
     return FFO
 end
 
+"""
+    get_FFO(ϵ::Float64,B::Function,N0::Int; tmax = 1e3,  solver=Tsit5(), psec = true)
+    Gives back the evolution map until N0 point of intersection with Poincaree surface
+    for some initial conditions x0
+"""
+
+function get_FFO(ϵ::Float64, B::Function, N0::Int; tmax=1e3, solver=Vern9(), psec=true)
+
+    # ODE system
+    function f!(du, u, p, t)
+        # u₁ = x, u₂ = y, u₃ = z
+        # u₄ = vₓ, u₅ = v_y, u₆ = v_z
+        b = B(u)
+        du[1] = ϵ * u[4]
+        du[2] = ϵ * u[5]
+        du[3] = ϵ * u[6]
+        du[4] =  u[5]*b[3] - u[6]*b[2]
+        du[5] = -(u[4]*b[3] - u[6]*b[1])
+        du[6] =  u[4]*b[2] - u[5]*b[1]
+    end
+
+    function FFO(u0::AbstractArray; N=N0, p=nothing, abstol=1e-15, reltol=1e-15)
+
+        prob = ODEProblem(f!, u0, (0.0, tmax), p)
+
+        if psec
+            # storage for Poincaré points and times
+            psec_points = Vector{typeof(copy(u0))}()
+            psec_times  = Float64[]
+
+            # section: v_y = 0
+            condition(u, t, integrator) = u[5]
+
+            function affect!(integrator)
+                # keep only crossings with v_x > 0, and ignore t=0
+                if integrator.t > 0 && integrator.u[4] > 0
+                    push!(psec_points, copy(integrator.u))
+                    push!(psec_times, integrator.t)
+
+                    # stop once we have N section points
+                    if length(psec_points) >= N
+                        terminate!(integrator)
+                    end
+                end
+            end
+
+            cb = ContinuousCallback(condition, affect!; save_positions=(true, true))
+
+            sol = solve(prob, solver; callback=cb, abstol=abstol, reltol=reltol)
+
+            return sol, psec_points, psec_times
+        else
+            sol = solve(prob, solver; abstol=abstol, reltol=reltol)
+            return sol
+        end
+    end
+
+    return FFO
+end
+
+function get_FGC(J::SlabJ; solver=Vern9())
+    N,D = J_Dinamics(J)
+    function contract(A,B)
+        return real(ein"ijk,ijk->"(A, B))[]
+    end
+    # ODE system
+    function f!(du, u, p, t)
+        # u₁ = x, u₂ = y, u₃ = z
+        # u₄ = vₓ, u₅ = v_y, u₆ = v_z
+        L = N(u)
+        Ux, Vx= L[1,:,:,:], L[2,:,:,:]
+        UJ = contract(J.coeff, Ux)
+        VJ = contract(J.coeff, Vx)
+        DJ = contract(J.coeff, D(u))
+        du[1] = UJ/DJ
+        du[2] = VJ/DJ
+        du[3] = 0
+    end
+
+    function FGC(u0::AbstractArray;tmax=1e3, p=nothing, abstol=1e-15, reltol=1e-15)
+
+        prob = ODEProblem(f!, u0, (0.0, tmax), p)
+        sol = solve(prob, solver; abstol=abstol, reltol=reltol)
+        return sol
+
+    return FGC
+    end
+end
+
+function get_FGC(J,B; solver=Vern9())
+    # ODE system
+    function f!(du, u, p, t)
+        # u₁ = x, u₂ = y, u₃ = r
+        # u₄ = vₓ, u₅ = v_y, u₆ = v_r
+        ∇J =   ForwardDiff.gradient(J,u[1:3])
+        UJ = p[1]^2*∇J[2]
+        VJ = -p[1]^2*∇J[1]
+        DJ = B(u)/u[3]*(∇J[3] - p[1]*B(u)^(-1)*∇J[2])
+        du[1] = UJ/DJ
+        du[2] = VJ/DJ
+        du[3] = 0
+    end
+
+    function FGC(u0::AbstractArray,p;tmax=1e3, abstol=1e-15, reltol=1e-15)
+
+        prob = ODEProblem(f!, u0, (0.0, tmax), p)
+        sol = solve(prob, solver; abstol=abstol, reltol=reltol)
+        return sol
+
+    return FGC
+    end
+end
 end # module
