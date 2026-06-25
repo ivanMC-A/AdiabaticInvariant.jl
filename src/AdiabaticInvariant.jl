@@ -244,8 +244,8 @@ end
 
 """
     function gTrans(x::Number, a::Number, b::Number; F = true, L = 2*π)
-This function transforms a point x in [0, L] to a point in [a, b] if F = true and 
-transformsa point x in [-1, 1] to a point in [a, b] if F = false.
+If F = true, this function transforms a point x ∈ [0, L] to a point y ∈ [a, b], else
+transforms a point x ∈ [-1, 1] to a point y ∈ [a, b].
 
 """
 
@@ -258,19 +258,11 @@ function gTrans(x::Number, a::Number, b::Number; F = true, L = 2*π)
 end
 
 """
-    function gTrans(x::AbstractArray, a::Number, b::Number; F = true, L = 2*π)
-This function transforms a set of arrays xᵢ ∈ (x, y, r) of domain [0, L], to an array of 
-points in [a, b] if F = true and transforms an array of points x in [-1, 1] to an array of
-points in [a, b] if F = false. 
-"""
+    function gInv(x::Number, a::Number, b::Number; F = true, L = 2*π)
+If F = true, this function transforms a point y ∈ [a, b] to a point x ∈ [0, L], else
+transforms a point y ∈ [a, b] to a point x ∈ [-1, 1].
 
-function trans_pts(x,y,r,bd;L = 2*π)
-    # bd are the boundaries of my domain. It should be an vector (ax,bx,ay,...,br)
-    xt = gTrans.(x,bd[1],bd[2], L = L)
-    yt = gTrans.(y,bd[3],bd[4], L = L)
-    rt = gTrans.(r,bd[5],bd[6]; F = false)
-    return xt, yt, rt
-end
+"""
 
 function gInv(y::Number, a::Number, b::Number; F = true, L = 2*π)
     if F
@@ -279,6 +271,14 @@ function gInv(y::Number, a::Number, b::Number; F = true, L = 2*π)
         return 2*(y-a)/(b-a) - 1
     end
 end
+
+"""
+    function trans_pts(x::Number, y::Number, z::Number, bd::tuple; L = 2*π)
+
+This function transforms a point xᵢ ∈ (x, y, r) of domain [0,Lₓ]X[0,L_y]X[-1,1] to a codomain
+[a,b]ₓX[a,b]_yX[a,b]ᵣ
+"""
+
 
 function get_for_trans(bd::Tuple)
     F1 = x -> AdiabaticInvariant.gTrans.(x, bd[1], bd[2]) # Get transformation function from fourier points to domain
