@@ -81,7 +81,26 @@ function FFOvsFGC(u,pspt,tf,FGC,p)
     return norm(sol.u[end]-fof)/norm(fof-sol.u[1])
 end
 
-function rel_err(ϵ,vx,x0)
+function FFOvsFGC(u,pspt,tf,FGC)
+    ## FFO vs FGC
+
+    # Initial conditions
+
+    x0 = FOtPS(u[:,1])
+
+    fof = FOtPS(pspt[1])
+
+    # Evolving the system
+
+    sol = FGC(x0; tmax = tf)
+    # return norm(sol.u[end]-fof)
+
+    # return norm(fof-sol.u[1])
+
+    return norm(sol.u[end]-fof)/norm(fof-sol.u[1])
+end
+
+function rel_err(ϵ,vx,x0; pert = true)
     function mfield(r;scalar = true)
         if scalar
             return 1 + 0.03*cos(3*r[1] + 1*r[2]) + 0.03*cos(1*r[1] + 3*r[2])
@@ -94,10 +113,18 @@ function rel_err(ϵ,vx,x0)
 
     B = x -> mfield(x)
 
-    M = tuple(61,61,61)
+    if pert
+        J = full_J(ϵ,B)
+        FGC = get_FGC(J,B)
+        p = [ϵ]
+    else
+        
+        M = tuple(31,31,31)
 
-    J = get_J(vx, B, ϵ, M)
-    # J = full_J(ϵ,B)
+        J = get_J(vx, B, ϵ, M)
+        FGC = get_FGC(J)
+    end
+    # 
 
     N = 3
 
@@ -105,9 +132,12 @@ function rel_err(ϵ,vx,x0)
 
     u, pspt, pst = get_FFO_solution(FFO,x0,vx)
 
-    FGC = get_FGC(J)
-
-    FFOvsFGC(u, pspt, pst[1], FGC)
+    if pert
+        FFOvsFGC(u, pspt, pst[1], FGC, p)
+    else
+        FFOvsFGC(u, pspt, pst[1], FGC)
+    end
+    
 end
 
 ##
@@ -115,14 +145,16 @@ end
 
 eps = 10 .^LinRange(-6,0,10)
 
-error = zeros(length(eps))
+err1 = zeros(length(eps))
+err2 = zeros(length(eps))
 
 vx = 0.1
 
 x0 = [3,2,0]
 
 for i in 1:length(eps)
-    error[i] = rel_err(eps[i],vx,x0) 
+    err1[i] = rel_err(eps[i],vx,x0; pert = false) 
+    err2[i] = rel_err(eps[i],vx,x0)
 end
 
 ## Plotting error
@@ -130,6 +162,10 @@ end
 f = Figure()
 ax1 = Axis(f[1, 1], xscale = log10, yscale = log10, xlabel = L"\epsilon", ylabel = L"\text{Relative error of FGC}",
     title = L"Screening of $\epsilon$")
-lines!(ax1, eps, error)
+lines!(ax1, eps, err1, label = "Interpolation")
 lines!(ax1, eps,(1e-6./eps).^2. *10^-2)
+lines!(ax1, eps,err2, label = "Perturbative J")
+axislegend(ax1)
 f
+
+save("relative_error.pdf", f)

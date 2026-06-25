@@ -1,10 +1,12 @@
 module AdiabaticInvariant
 export JInvariant, slabJ, evaluate, full_J, get_eval_points, deval, numN, numNt, denomD,get_FFO, J_Dinamics, get_FGC
+export getJ
 using OMEinsum
 using LinearAlgebra
 using DifferentialEquations
 using ForwardDiff
 using StaticArrays
+using FastGaussQuadrature
 
 # -----------------------------------------------
 # Definitions
@@ -110,8 +112,8 @@ function numNt(J::SlabJ,x)
     Jy = real(ein"ijk,i,j,k->"(J.coeff,vx,dvy,vr)[])
     Jr = real(ein"ijk,i,j,k->"(J.coeff,vx,vy,dvr)[])
 
-    U = -J.ϵ^2*Jy
-    V = J.ϵ^2*Jx
+    U = J.ϵ^2*Jy
+    V = -J.ϵ^2*Jx
     return [U,V]
 end
 
@@ -191,47 +193,6 @@ function perturvedJ(ϵ::Float64,B,∇B,HB,x::AbstractVector; perp = true)
         vₚ = sqrt(x[3]^2 + x[4]^2)
     end
     return vₚ^2/(2*B(x)) + ϵ * vₚ^3 * ∇B(x)[2]/(2*B(x)^3) + ϵ^2 * vₚ^4 / (16 * B(x)^5) * (3 * (∇B(x)[1]^2 + 5 * ∇B(x)[2]^2) - B(x) * (HB(x)[1,1] + 5 * HB(x)[2,2]))
-end
-
-function get_for_trans(bd::Tuple)
-    F1 = x -> AdiabaticInvariant.gTrans.(x, bd[1], bd[2]) # Get transformation function from fourier points to domain
-    F2 = y -> AdiabaticInvariant.gTrans.(y, bd[3], bd[4]) # Get transformation function from fourier points to domain
-    F3 = r -> AdiabaticInvariant.gTrans.(r, bd[5], bd[6]; F = false) # Get transformation function from chebyshev points to domain
-    return F1, F2, F3
-end
-
-function get_inv_trans(bd::Tuple)
-    InvF1 = x -> AdiabaticInvariant.gInv.(x, bd[1], bd[2]) # Get inverse transformation function from domain to fourier points
-    InvF2 = y -> AdiabaticInvariant.gInv.(y, bd[3], bd[4]) # Get inverse transformation function from domain to fourier points
-    InvF3 = r -> AdiabaticInvariant.gInv.(r, bd[5], bd[6]; F = false) # Get inverse transformation function from domain to chebyshev points
-    return InvF1, InvF2, InvF3
-end
-
-function get_trans_func(bd::Tuple)
-    F1, F2, F3 = get_for_trans(bd)
-    InvF1, InvF2, InvF3 = get_inv_trans(bd)
-    return F1, InvF1, F2, InvF2, F3, InvF3
-end
-
-function get_col_points(N::AbstractArray;Lx = 2*π,Ly = 2*π)
-    x = evenpts(N[1];L = Lx)
-    y = evenpts(N[2];L = Ly)
-    r = chept1st(N[3])
-    return x,y,r
-end
-
-function get_dcol_points(x::AbstractArray,y::AbstractArray,r::AbstractArray, bd::Tuple)
-    F1, F2, F3 = get_for_trans(bd)
-    xt = F1(x)
-    yt = F2(y)
-    rt = F3(r)
-    return xt, yt, rt
-end
-
-function get_eval_points(N::AbstractArray,bd::Tuple;Lx = 2*π,Ly = 2*π)
-    x, y, r = get_col_points(N;Lx = Lx, Ly = Ly)
-    xt, yt, rt = get_dcol_points(x,y,r,bd)
-    return x, xt, y, yt, r, rt
 end
 
 function full_J(ϵ,B)
@@ -317,6 +278,47 @@ function gInv(y::Number, a::Number, b::Number; F = true, L = 2*π)
     else
         return 2*(y-a)/(b-a) - 1
     end
+end
+
+function get_for_trans(bd::Tuple)
+    F1 = x -> AdiabaticInvariant.gTrans.(x, bd[1], bd[2]) # Get transformation function from fourier points to domain
+    F2 = y -> AdiabaticInvariant.gTrans.(y, bd[3], bd[4]) # Get transformation function from fourier points to domain
+    F3 = r -> AdiabaticInvariant.gTrans.(r, bd[5], bd[6]; F = false) # Get transformation function from chebyshev points to domain
+    return F1, F2, F3
+end
+
+function get_inv_trans(bd::Tuple)
+    InvF1 = x -> AdiabaticInvariant.gInv.(x, bd[1], bd[2]) # Get inverse transformation function from domain to fourier points
+    InvF2 = y -> AdiabaticInvariant.gInv.(y, bd[3], bd[4]) # Get inverse transformation function from domain to fourier points
+    InvF3 = r -> AdiabaticInvariant.gInv.(r, bd[5], bd[6]; F = false) # Get inverse transformation function from domain to chebyshev points
+    return InvF1, InvF2, InvF3
+end
+
+function get_trans_func(bd::Tuple)
+    F1, F2, F3 = get_for_trans(bd)
+    InvF1, InvF2, InvF3 = get_inv_trans(bd)
+    return F1, InvF1, F2, InvF2, F3, InvF3
+end
+
+function get_col_points(N::AbstractArray;Lx = 2*π,Ly = 2*π)
+    x = evenpts(N[1];L = Lx)
+    y = evenpts(N[2];L = Ly)
+    r = chept1st(N[3])
+    return x,y,r
+end
+
+function get_dcol_points(x::AbstractArray,y::AbstractArray,r::AbstractArray, bd::Tuple)
+    F1, F2, F3 = get_for_trans(bd)
+    xt = F1(x)
+    yt = F2(y)
+    rt = F3(r)
+    return xt, yt, rt
+end
+
+function get_eval_points(N::AbstractArray,bd::Tuple;Lx = 2*π,Ly = 2*π)
+    x, y, r = get_col_points(N;Lx = Lx, Ly = Ly)
+    xt, yt, rt = get_dcol_points(x,y,r,bd)
+    return x, xt, y, yt, r, rt
 end
 
 ###### Fourier Stuff
@@ -752,9 +754,10 @@ function get_FGC(J,B; solver=Vern9())
         # u₁ = x, u₂ = y, u₃ = r
         # u₄ = vₓ, u₅ = v_y, u₆ = v_r
         ∇J =   ForwardDiff.gradient(J,u[1:3])
+        BB = B(u)
         UJ = p[1]^2*∇J[2]
         VJ = -p[1]^2*∇J[1]
-        DJ = B(u)/u[3]*(∇J[3] - p[1]*B(u)^(-1)*∇J[2])
+        DJ = BB/u[3]*(∇J[3] - p[1]*BB^(-1)*∇J[2])
         du[1] = UJ/DJ
         du[2] = VJ/DJ
         du[3] = 0
@@ -769,4 +772,82 @@ function get_FGC(J,B; solver=Vern9())
     return FGC
     end
 end
+
+## J
+## funcitons
+
+"""
+    get_J(dxdt, B, ϵ, N)
+    Construct the adiabatic invariant for the system of interest. 
+"""
+
+function get_J(dxdt, B, ϵ, N::Tuple; x1i = 0.0, x1f = 2π, x2i = 0.0, x2f = 2π, dr = 5)
+
+    ### Setting domain parameters
+    x3i, x3f = -dr + dxdt, dr + dxdt
+
+    ### Setting polynomial parameters
+    Nx, Ny, Nr = N[1], N[2], N[3]
+
+    J = slabJ(Nx, Ny, Nr, x1i, x1f, x2i, x2f, x3i, x3f, ϵ, B)
+    return J
+end
+
+## Legendre Polynomials
+
+"""
+    legendre_pol(N::Number, x::T) where {T <: Number}
+
+    Creates a vector of length N+1 where for the l component of the vector we find the P_l 
+    legendre polynomial.
+"""
+
+function legendre_pol(N::Number, x::T) where {T <: Number}
+    p = zeros(N + 1)
+    for i in 0:N
+        if i > 1
+           p[i+1] = ((2*(i-1) + 1)*x* p[i] - (i-1) * p[i-1])/((i-1)+1)
+        elseif i == 1
+            p[i+1] = x
+        else
+            p[i+1] = 1
+        end
+    end
+    return p
+end
+
+"""
+    legendre_coeffs(f::Function, N::Number,Nr::Number, pol::Function)
+
+    Given a function for interpolartion f; degree of polynomial N; number of gausslegendre 
+    quadrature points Nr; and a precomputed legendre polynomial of degree N, pol; this function
+    obtains the coefficients of interpolation a_l.
+"""
+
+function legendre_coeffs(f::Function, N::Number,Nr::Number, pol::Function)
+    x, w = gausslegendre(Nr)
+
+    a = zeros(N+1)
+
+    for l in 0:N
+        integral = sum(w[i]* f(x[i]) * pol(x[i])[l+1] for i in 1:Nr)
+        a[l + 1] = (2*l+1)/ 2 * integral
+    end
+    return a
+end
+
+"""
+    legendreA(pol::Function,x::AbstractVector)
+
+    Given a precomputed legendre polynomial of degree N, pol; and a set of points x ⊂ [-1,1] of length M;
+    this function generates a matrix A ∈ R^(MxN)
+    
+"""
+
+function legendreA(pol::Function,x::AbstractVector)
+    [pol(xi)[l] for xi in x, l in 1:length(pol(1))]
+end
+
+
+
 end # module

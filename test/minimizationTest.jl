@@ -12,12 +12,10 @@ using LinearAlgebra
     Construct the adiabatic invariant for the system of interest. 
 """
 
-function get_J(dxdt, B, ϵ, N::Tuple)
+function get_J(dxdt, B, ϵ, N::Tuple; x1i = 0.0, x1f = 2π, x2i = 0.0, x2f = 2π, dr = 5)
 
     ### Setting domain parameters
-    x1i, x1f = 0.0, 2π
-    x2i, x2f = 0.0, 2π
-    x3i, x3f = -5 + dxdt, 5 + dxdt
+    x3i, x3f = -dr + dxdt, dr + dxdt
 
     ### Setting polynomial parameters
     Nx, Ny, Nr = N[1], N[2], N[3]
@@ -57,6 +55,29 @@ function dotX(x0,x,t)
     return dotx, midx
 end
 
+"""
+    function dotX_all(points, times)
+        N = length(points) - 1
+
+        dots = Vector{Vector{Float64}}(undef, N)
+        mids = Vector{Vector{Float64}}(undef, N)
+
+        for i in 1:N
+            if i == 1
+                t = times[i]
+            else
+                t = times[i] - times[i-1]
+            end
+            dots[i], mids[i] = dotX(points[i], points[i+1], t)
+        end
+
+        return dots, mids
+    end
+    This function generalizes the function dotX(x0,x,t), such that you can give it an array
+    positions and times, in this case intersections with the poincaré section, and it gives
+    back the derivative between at that point wich corresponds to the velocity of at the mid
+    point.
+"""
 
 
 function dotX_all(points, times)
@@ -78,18 +99,18 @@ function dotX_all(points, times)
 end
 
 """
-    Function linV(x,dx,N,D)
+    Function linEoM(x,dx,N,D)
         s = size(D(x))
         XD = reshape(dx[1:2],2,1,1,1) .*reshape(D(x),1,s[1],s[2],s[3])
         return XD- N(x)
     end
     Calculate the vector dotX * D - N where D and N are the denominator and numerator of the
-    vector field G(x) = N(x)/D(x). G is applied to the J coeffients and this should gave the
+    vector field G(x) = N(x)/D(x). G is applied to the J coeffients and this should give the
     EoM in the poincaré section. This needs to be contracted with the J coeffiecients to get 
-    a vector ∈ R^2. If J is a good adiabatic invariant this vector should be close to zero.
+    a vector c ∈ R^2. If J is a good adiabatic invariant this vector should be close to zero.
 """
 
-function linV(x,dx,N,D)
+function linEoM(x,dx,N,D)
     s = size(D(x))
     XD = reshape(dx[1:2],2,1,1,1) .*reshape(D(x),1,s[1],s[2],s[3])
     return XD- N(x)
@@ -99,7 +120,7 @@ end
     function build_A(N,D,X,DX)
         A = []
         for i in getindex(X)
-            push!(A, linV(X[i], DX[i], N, D))
+            push!(A, linEoM(X[i], DX[i], N, D))
         end
         return A
     end
@@ -110,7 +131,7 @@ function build_A(N,D,X,DX)
     A = []
     n = length(X) - 1
     for i in 1:n
-        push!(A, linV(X[i], DX[i], N, D))
+        push!(A, linEoM(X[i], DX[i], N, D))
     end
     return A
 end
@@ -126,7 +147,7 @@ end
 
 """
     Function Aj(x,dx,N,D,J)
-        lin = linV(x,dx,N,D)
+        lin = linEoM(x,dx,N,D)
         a = real(ein"ijk,ijk->"(J.coeff, lin[1,:,:,:]))[]
         b = real(ein"ijk,ijk->"(J.coeff, lin[2,:,:,:]))[]
         return [a,b]

@@ -2,8 +2,10 @@ using AdiabaticInvariant
 using LinearAlgebra
 using OMEinsum
 using CairoMakie
+using FastGaussQuadrature
+using Polynomials
 
-# 1D Fourier reconstruction test
+## 1D Fourier reconstruction test
 # Test function: x^2
 
 # Define domain and parameters
@@ -266,3 +268,69 @@ maximum(abs(y4mnp[a,b,c] - y4r(x4t[a], y4t[b], z4t[c]))
 maximum(abs(ϕ4[a,i] - vx4(x4t[a])[i]) for a in eachindex(x4t), i in 1:Nx)
 maximum(abs(Θ4[a,i] - vy4(y4t[a])[i]) for a in eachindex(y4t), i in 1:Ny)
 maximum(abs(Ψ4[a,i] - vz4(z4t[a])[i]) for a in eachindex(z4t), i in 1:Nz)
+
+## Legendre polynomials
+
+function legendre_pol(N::Number, x::T) where {T <: Number}
+    p = zeros(N + 1)
+    for i in 0:N
+        if i > 1
+           p[i+1] = ((2*(i-1) + 1)*x* p[i] - (i-1) * p[i-1])/((i-1)+1)
+        elseif i == 1
+            p[i+1] = x
+        else
+            p[i+1] = 1
+        end
+    end
+    return p
+end
+
+# Compute coefficients a_0, ..., a_N
+
+function legendre_coeffs(f, N::Number,Nr::Number, pol)
+    x, w = gausslegendre(Nr)
+
+    a = zeros(N+1)
+
+    for l in 0:N
+        integral = sum(w[i]* f(x[i]) * pol(x[i])[l+1] for i in 1:Nr)
+        a[l + 1] = (2*l+1)/ 2 * integral
+    end
+    return a
+end
+
+function legendreA(pol,x::AbstractVector)
+    [pol(xi)[l] for xi in x, l in 1:length(pol(1))]
+end
+
+## Testing legendre functions
+N = 20
+pol = x -> legendre_pol(N,x)
+
+legendre_pol(N,10)
+
+f = x-> exp(x)
+
+Nr = 30
+a = legendre_coeffs(f,N,Nr,pol)
+
+x = 0:0.1:0.5
+
+A = legendreA(pol,x)
+
+ft = ein"ij,j->i"(A,a)
+
+fv = [f(xi) for xi in x]
+
+err = abs.(ft .- fv)
+
+fig = Figure()
+ax = Axis(fig[1,1],
+    xlabel = "x",
+    ylabel = "|f(x) - f_N(x)|",
+    title = "Approximation Error"
+)
+
+lines!(ax, x, err)
+
+fig
