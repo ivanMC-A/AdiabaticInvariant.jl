@@ -1,6 +1,7 @@
 module AdiabaticInvariant
 export JInvariant, slabJ, evaluate, full_J, get_eval_points, deval, numN, numNt, denomD,get_FFO, J_Dinamics, get_FGC
 export getJ
+export legendre_coeffs,legendre_pol,legendreA
 using OMEinsum
 using LinearAlgebra
 using DifferentialEquations
@@ -273,12 +274,10 @@ function gInv(y::Number, a::Number, b::Number; F = true, L = 2*π)
 end
 
 """
-    function trans_pts(x::Number, y::Number, z::Number, bd::tuple; L = 2*π)
-
-This function transforms a point xᵢ ∈ (x, y, r) of domain [0,Lₓ]X[0,L_y]X[-1,1] to a codomain
-[a,b]ₓX[a,b]_yX[a,b]ᵣ
+    function get_for_trans(bd::Tuple)
+Given a bounday tuple "bd", this function generates transformation functions for x, y and r
+in the domains [0,Lₓ], [0,L_y], and [-1,1] to codomains [a,b]ₓ,[a,b]_y, and [a,b]ᵣ
 """
-
 
 function get_for_trans(bd::Tuple)
     F1 = x -> AdiabaticInvariant.gTrans.(x, bd[1], bd[2]) # Get transformation function from fourier points to domain
@@ -287,6 +286,12 @@ function get_for_trans(bd::Tuple)
     return F1, F2, F3
 end
 
+"""
+    function get_inv_trans(bd::Tuple)
+Given a bounday tuple "bd", this function generates inverse transformation functions for x, y and r
+in the domains [a,b]ₓ,[a,b]_y, and [a,b]ᵣ to codomains [0,Lₓ], [0,L_y], and [-1,1]
+"""
+
 function get_inv_trans(bd::Tuple)
     InvF1 = x -> AdiabaticInvariant.gInv.(x, bd[1], bd[2]) # Get inverse transformation function from domain to fourier points
     InvF2 = y -> AdiabaticInvariant.gInv.(y, bd[3], bd[4]) # Get inverse transformation function from domain to fourier points
@@ -294,18 +299,42 @@ function get_inv_trans(bd::Tuple)
     return InvF1, InvF2, InvF3
 end
 
+"""
+    function get_trans_func(bd::Tuple)
+Given a bounday tuple "bd", this function generates forward and inverse transformations
+"""
+
 function get_trans_func(bd::Tuple)
     F1, F2, F3 = get_for_trans(bd)
     InvF1, InvF2, InvF3 = get_inv_trans(bd)
     return F1, InvF1, F2, InvF2, F3, InvF3
 end
 
-function get_col_points(N::AbstractArray;Lx = 2*π,Ly = 2*π)
+"""
+    function get_col_points(N::AbstractArray;Lx = 2*π,Ly = 2*π)
+    
+This function gets collocation points for FourierXFourierXChebyshev points to obtain
+coefficients of interpolating polynomial.
+"""
+
+function get_col_points(N::AbstractArray;Lx = 2*π,Ly = 2*π, chev = true)
     x = evenpts(N[1];L = Lx)
     y = evenpts(N[2];L = Ly)
-    r = chept1st(N[3])
-    return x,y,r
+    if chev
+        r = chept1st(N[3])
+        return x,y,r
+    else
+        r,w = gausslegendre(N[3])
+        return x,y,r
+    end
 end
+
+"""
+    get_dcol_points(x::AbstractArray,y::AbstractArray,r::AbstractArray, bd::Tuple)
+    
+Given x, y, and r arrays, this function gets transformed collocation points for 
+FourierXFourierXChebyshev points to obtain coefficients of interpolating polynomial.
+"""
 
 function get_dcol_points(x::AbstractArray,y::AbstractArray,r::AbstractArray, bd::Tuple)
     F1, F2, F3 = get_for_trans(bd)
@@ -314,6 +343,16 @@ function get_dcol_points(x::AbstractArray,y::AbstractArray,r::AbstractArray, bd:
     rt = F3(r)
     return xt, yt, rt
 end
+
+"""
+    get_eval_points(N::AbstractArray,bd::Tuple;Lx = 2*π,Ly = 2*π)
+    
+Inputs:
+    - N::AbstracArray: Contains number of collocation points in the x, y, and r domains
+    - bd::Tuple: Contains boundaries for the x, y, and r domains
+This function gets the collocation and transformed collocation points for the interpolation
+polynomial.
+"""
 
 function get_eval_points(N::AbstractArray,bd::Tuple;Lx = 2*π,Ly = 2*π)
     x, y, r = get_col_points(N;Lx = Lx, Ly = Ly)
@@ -837,6 +876,26 @@ function legendre_coeffs(f::Function, N::Number,Nr::Number, pol::Function)
 end
 
 """
+    legendre_coeffs(f::Function, N::Number,Nr::Number, pol::Function,b::Number,c::Number)
+
+    Given a function for interpolartion f; degree of polynomial N; number of gausslegendre 
+    quadrature points Nr; a precomputed legendre polynomial of degree N; and a boundary bd; this function
+    obtains the coefficients of interpolation a_l on a domain [a,b].
+"""
+
+function legendre_coeffs(f::Function, N::Number,Nr::Number, pol::Function,b::Number,c::Number)
+    x, w = gausslegendre(Nr)
+
+    a = zeros(N+1)
+
+    for l in 0:N
+        integral = sum(w[i]* f(gTrans(x[i],b,c; F=false)) * pol(x[i])[l+1] for i in 1:Nr)
+        a[l + 1] = (2*l+1)/ 2 * integral
+    end
+    return a
+end
+
+"""
     legendreA(pol::Function,x::AbstractVector)
 
     Given a precomputed legendre polynomial of degree N, pol; and a set of points x ⊂ [-1,1] of length M;
@@ -844,10 +903,15 @@ end
     
 """
 
-function legendreA(pol::Function,x::AbstractVector)
-    [pol(xi)[l] for xi in x, l in 1:length(pol(1))]
+function legendreA(pol::Function, x::AbstractVector)
+    n = length(pol(first(x)))
+    return [pol(xi)[l] for xi in x, l in 1:n]
 end
 
-
+function legendreA(pol::Function, x::AbstractVector,a::Number,b::Number)
+    n = length(pol(first(x)))
+    g = x-> gInv(x,a,b;F=false)
+    return [pol(g(xi))[l] for xi in x, l in 1:n]
+end
 
 end # module
