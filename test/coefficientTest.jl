@@ -271,9 +271,9 @@ maximum(abs(Ψ4[a,i] - vz4(z4t[a])[i]) for a in eachindex(z4t), i in 1:Nz)
 
 ## Testing legendre functions
 
-function test_legendre(N::Number,Nr::Number,x::AbstractArray,f::Function)
+function test_legendre(N::Number,x::AbstractArray,f::Function)
     pol = x -> legendre_pol(N,x)
-    a = legendre_coeffs(f,N,Nr,pol)
+    a = AdiabaticInvariant.legendre_coeffs(f,N,pol)
     A = legendreA(pol,x)
     ft = ein"ij,j->i"(A,a)
     fv = [f(xi) for xi in x]
@@ -281,7 +281,7 @@ function test_legendre(N::Number,Nr::Number,x::AbstractArray,f::Function)
     return err, x
 end
 
-err, x = test_legendre(20,30,0:0.01:0.5,x-> exp(x))
+err, x = test_legendre(21,30,0:0.01:0.5,x-> exp(x))
 
 fig = Figure()
 ax = Axis(fig[1,1],
@@ -296,17 +296,19 @@ fig
 
 ## Legendre polynomials in a [a,b] domain
 
-function test_legendre(N::Number,Nr::Number,x::AbstractArray,f::Function,a::Number,b::Number)
-    pol = x -> legendre_pol(N,x)
-    as = AdiabaticInvariant.legendre_coeffs(f,N,Nr,pol,a,b)
-    A = AdiabaticInvariant.legendreA(pol,x,a,b)
+function test_legendre(N::Number,x::AbstractArray,f::Function,a::Number,b::Number)
+    pol = x -> AdiabaticInvariant.legendre_pol(N,x)
+    g = y-> AdiabaticInvariant.gInv(y,a,b;F = false)
+    as = AdiabaticInvariant.legendre_coeffs(f,N,pol,a,b)
+    println(as)
+    A = AdiabaticInvariant.legendreA(pol,g.(x))
     ft = ein"ij,j->i"(A,as)
     fv = [f(xi) for xi in x]
     err = abs.(ft .- fv)
     return err, x
 end
 
-err1, x1 = test_legendre(20,30,0:0.1:10,x-> exp(x),0,10)
+err1, x1 = test_legendre(21,0:0.1:10,x-> exp(x),0,10)
 
 fig1 = Figure()
 ax1 = Axis(fig1[1,1],
@@ -318,3 +320,228 @@ ax1 = Axis(fig1[1,1],
 lines!(ax1, x1, err1)
 
 fig1
+## Derivatives of legendre polynomials
+
+function test_deriv_legendre(N::Number,x::AbstractArray,f::Function,a::Number,b::Number)
+    pol = x -> legendre_pol(N,x)
+    g = y-> AdiabaticInvariant.gInv(y,a,b;F = false)
+    deriv_pol = x-> AdiabaticInvariant.deriv_legendre_pol(x,pol,a,b)
+    as = AdiabaticInvariant.legendre_coeffs(x->sin(x),N,pol,a,b)
+    A = AdiabaticInvariant.legendreA(deriv_pol,g.(x))
+    ft = ein"ij,j->i"(A,as)
+    fv = [f(xi) for xi in x]
+    err = abs.(ft .- fv)
+    return err, x
+end
+
+err2, x2 = test_deriv_legendre(21,0:0.1:10,x-> cos(x),0,10)
+
+
+fig2 = Figure()
+ax2 = Axis(fig2[1,1],
+    xlabel = "x",
+    ylabel = "|f(x) - f_N(x)|",
+    title = "Approximation Error"
+)
+
+lines!(ax2, x2, err2)
+
+fig2
+
+## 2D Fourier Chebyshev case
+# Test function: sin(x) + y
+
+# Define domain and parameters
+
+xi, xf = 0, 2π
+yi, yf = 2,4
+Nx = 11 # Number of Fourier modes
+N = 10 # Maximun degree of Legendre polynomial
+bd = tuple(xi,xf,yi,yf)
+
+# Define functions to use
+
+
+fpts = x -> AdiabaticInvariant.evenpts(x)       # Get even spaced points for fourier reconstruction
+
+F = x -> AdiabaticInvariant.gTrans.(x, bd[1], bd[2]) # Get transformation function from fourier points to domain
+
+InvF = x -> AdiabaticInvariant.gInv.(x, bd[1], bd[2]) # Get inverse transformation function from domain to fourier points
+
+G = y -> AdiabaticInvariant.gTrans.(y, bd[3], bd[4], F = false) # Get transformation function from gausslegendre points to domain
+
+InvG = y -> AdiabaticInvariant.gInv.(y, bd[3], bd[4], F = false) # Get inverse transformation function from domain to gausslegendre points
+
+yL = (x,y) -> sin(x) + y                                  # Define function to reconstruct
+
+
+# Obtain points and transform them
+
+x = fpts(Nx)                                      # get even spaced points
+xt = F(x)                                        # transform points to domain
+Ny = Int(round(N+1))
+y, w = gausslegendre(Ny)
+yt = G(y)
+y1n = [yL(xi,yj) for xi in xt, yj in yt]                            # get function values at transformed points
+
+# Obtain Fourier matrix
+
+ϕ1 = AdiabaticInvariant.fourA(Nx)
+ϕ1T = ϕ1' 
+W1 = real(Diagonal(ein"ik,kj->ij"(ϕ1T, ϕ1)))
+
+# From the right
+a1 = W1\ein"ik,kj->ij"(ϕ1T, y1n)                   # get Fourier coefficients
+
+Wb = (bd[4]-bd[3])/2 .*Diagonal(w)
+
+B = AdiabaticInvariant.legendreA(N,yt,InvG)
+BT = B'
+
+D = Diagonal(ein"ji,jk,kl->il"(B,Wb,B))
+Dinv = inv(D)
+C = ein"ij,jk,kl,lm->im"(a1,Wb,B,Dinv)
+
+# Getting vector bases for interpolated function
+
+vxFL = (x) -> AdiabaticInvariant.fourBase(Nx, InvF(x))
+vyFL = (y) -> AdiabaticInvariant.legeBase(N,InvG(y))
+
+fFL = (x,y) -> real(ein"i,ij,j->"(vxFL(x),C,vyFL(y))[])
+
+ErrFL = (x,y) -> abs.(yL(x,y) - fFL(x,y))
+
+xs = bd[1]:0.01:bd[2]
+ys = bd[3]:0.01:bd[4]
+
+ErrxyFL = [ErrFL(x,y) for x in xs, y in ys]
+
+maximum(ErrxyFL)
+
+## 3D Fourier by Fourier by Chebyshev case
+# Test function: cos(x)*sin(y) + z
+
+x_min, x_max = 0, 2π
+y_min, y_max = 0, 2π
+z_min, z_max = 1, 10
+Nx = 11
+Ny = 11
+Nz = 9
+N = [Nx, Ny, Nz]
+bd = tuple(x_min,x_max,y_min,y_max,z_min,z_max)
+
+
+
+# Get even spaced points and transform them for fourier reconstruction
+
+xFFL = fpts(N[1])
+xFFLt = F(xFFL)
+
+# Get even spaced points and transform them for fourier reconstruction
+
+yFFL = fpts(N[2])
+yFFLt = F(yFFL)
+
+# Get Chebyshev points of the first kind and transform them for Chebyshev reconstruction
+G = y -> AdiabaticInvariant.gTrans.(y, bd[5], bd[6], F = false) # Get transformation function from gausslegendre points to domain
+
+InvG = y -> AdiabaticInvariant.gInv.(y, bd[5], bd[6], F = false) # Get inverse transformation function from domain to gausslegendre points
+zFFL, wFFL = gausslegendre(N[3]+2)
+zFFLt = G(zFFL)
+
+# Getting function values
+
+yFFL = (x,y,z) -> cos(x)+sin(y) + z 
+
+yFFLn = [yFFL(xi,yj,zk) for xi in xFFLt, yj in yFFLt, zk in zFFLt]  
+
+# Get Fourier polinomials evaluated at even spaced points in x
+ϕF1 = AdiabaticInvariant.fourA(N[1])
+ϕF1T = ϕF1'
+DF1x = real(Diagonal(ein"ik,kj->ij"(ϕF1T, ϕF1)))
+
+# Get Fourier polinomials evaluated at even spaced points in y
+ϕF2 = AdiabaticInvariant.fourA(N[2])
+ϕF2T = ϕF2'
+DF2y = real(Diagonal(ein"ik,kj->ij"(ϕF2T, ϕF2)))
+
+# Get Chebyshev polinomials evaluated at Chebyshev points in z
+ΨL = AdiabaticInvariant.legendreA(N[3],zFFLt,InvG)
+WL = (bd[6]-bd[5])/2 .*Diagonal(wFFL)
+D4L = Diagonal(ein"ji,jk,kl->il"(ΨL,WL,ΨL))
+
+# Get Fourier by Fourier by Legendre coefficients
+
+# multiply from the left by the inverse of ψ4
+
+aF1 = ein"ij,jk,klm->ilm"(inv(DF1x),ϕF1T,yFFLn)
+
+aF2 = ein"ij,jk,lkm->lim"(inv(DF2y),ϕF2T,aF1)
+
+CFFL = ein"ijk,kl,lm,mn->ijn"(aF2,WL,ΨL,inv(D4L))
+
+# Get Fourier by Fourier by Legendre reconstruction
+# Create vectors for basis functions
+
+vxFFL = (x) -> AdiabaticInvariant.fourBase(N[1], InvF(x))
+vyFFL = (y) -> AdiabaticInvariant.fourBase(N[2], InvF(y))
+vzFFL = (z) -> AdiabaticInvariant.legeBase(N[3], InvG(z))
+yFFLr = (x,y,z) -> real(ein"i,ijk,j,k->"(vxFFL(x),CFFL,vyFFL(y),vzFFL(z))[])
+
+x0, y0, z0 = 0, π/2, 3
+
+
+ErrFFL(x,y,z) = abs.(yFFL(x,y,z) - yFFLr(x,y,z))/yFFL(x,y,z)
+
+# For fixed z
+ErrFFLz(x,y) = ErrFFL(x,y,z0)
+# For fixed y
+ErrFFLy(x,z) = ErrFFL(x,y0,z)
+# For fixed x
+ErrFFLx(y,z) = ErrFFL(x0,y,z)
+xs = range(0, 2π; length = 501)
+ys = range(0, 2π; length = 501)
+zs = range(1, 10; length = 501)
+Errxy = [ErrFFLz(x,y) for x in xs, y in ys]
+Errxz = [ErrFFLy(x,z) for x in xs, z in zs]
+Erryz = [ErrFFLx(y,z) for y in ys, z in zs]
+
+Errx = [ErrFFLz(x,y0) for x in xs]
+Erry = [ErrFFLz(x0,y) for y in ys]
+Errz = [ErrFFLx(y0,z) for z in zs]
+
+fig = Figure()
+ax = Axis(fig[1,1][1,1], title = "Error in x-y plane at z = $z0", xlabel = "x", ylabel = "y")
+hm = heatmap!(ax, xs, ys, Errxy)
+Colorbar(fig[1, 1][1, 2], hm)
+fig
+
+fig1 = Figure(size = (1000, 1000))
+
+ax1 = Axis(
+    fig1[1, 1],
+    xlabel = "x",
+    ylabel = "Error",
+    title = "Error along x"
+)
+
+ax2 = Axis(
+    fig1[2, 1],
+    xlabel = "y",
+    ylabel = "Error",
+    title = "Error along y"
+)
+
+ax3 = Axis(
+    fig1[3, 1],
+    xlabel = "z",
+    ylabel = "Error",
+    title = "Error along z"
+)
+
+lines!(ax1, xs, Errx, color = :blue, linewidth = 2)
+lines!(ax2, ys, Erry, color = :red, linewidth = 2)
+lines!(ax3, zs, Errz, color = :green, linewidth = 2)
+
+fig1
+

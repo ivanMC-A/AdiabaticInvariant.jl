@@ -1,7 +1,8 @@
 module AdiabaticInvariant
 export JInvariant, slabJ, evaluate, full_J, get_eval_points, deval, numN, numNt, denomD,get_FFO, J_Dinamics, get_FGC
 export getJ
-export legendre_coeffs,legendre_pol,legendreA
+export legendre_coeffs,legendre_pol,legendreA, gInv, deriv_legendre_pol
+export gTrans, gInv
 using OMEinsum
 using LinearAlgebra
 using DifferentialEquations
@@ -206,12 +207,38 @@ function get_Jn(x::AbstractVector,y::AbstractVector,r::AbstractVector,J)
     return Jn
 end
 
+""" gram_matrices(N::AbstractArray)
+
+This is a function that recieves an array N where N holds the number of modes and plynomial
+degree of the desired Fourier by Fourier by Chebyshev basis. This function computes the
+gram matrices of each basis and returns their corresponing adjoint matrices along with their
+additional matrices. In this case, additional matrices implies their weight matrix.
+"""
+
 function gram_matrices(N::AbstractArray)
     Φ, ΦT, WΦ= fourMatrices(N[1])
     Θ, ΘT, WΘ = fourMatrices(N[2])
     Ψ, ΨT, WΨ = chebMatrices(N[3])
     return ΦT, WΦ, Θ, WΘ, Ψ, WΨ
 end
+
+""" gram_matrices(N::AbstractArray,bd::Tuple)
+
+This is a function that recieves an array N where N holds the number of modes and plynomial
+degree of the desired Fourier by Fourier by Legendre basis, and G which is the function that
+transforms gauss legendre quatradure points into points in the corresponing domain of interest
+for Legendre polynomials. This function computes the gram matrices of each basis and returns
+their corresponing adjoint matrices along with their additional matrices. In this case, additional
+matrices implies their weight matrix.
+"""
+function gram_matrices(N::AbstractArray, bd::Tupple)
+    AF1, AF1T, DF1= fourMatrices(N[1])
+    AF2, AF2T, DF2 = fourMatrices(N[2])
+    AL, WL, DL = legebMatrices(N[3],bd)
+    return AF1T, DF1, AF2T, DF2, AL, WΨ
+end
+
+
 
 function coef_3d(Fijk,A1T,WA1,A2,WA2,A3,WA3)
     a = ein"ij,jk,kmn->imn"(inv(WA1),A1T,Fijk)
@@ -835,13 +862,13 @@ end
 ## Legendre Polynomials
 
 """
-    legendre_pol(N::Number, x::T) where {T <: Number}
+    legeBase(N::Number, x::T) where {T <: Number}
 
-    Creates a vector of length N+1 where for the l component of the vector we find the P_l 
+    Creates a vector of length N+1 where for the l component of the vector we find the P_l-1 
     legendre polynomial.
 """
 
-function legendre_pol(N::Number, x::T) where {T <: Number}
+function legeBase(N::Number, x::T) where {T <: Number}
     p = zeros(N + 1)
     for i in 0:N
         if i > 1
@@ -863,7 +890,8 @@ end
     obtains the coefficients of interpolation a_l.
 """
 
-function legendre_coeffs(f::Function, N::Number,Nr::Number, pol::Function)
+function legendre_coeffs(f::Function, N::Number, pol::Function)
+    Nr = Int(round((2*N-1)/2)) + 1
     x, w = gausslegendre(Nr)
 
     a = zeros(N+1)
@@ -883,7 +911,8 @@ end
     obtains the coefficients of interpolation a_l on a domain [a,b].
 """
 
-function legendre_coeffs(f::Function, N::Number,Nr::Number, pol::Function,b::Number,c::Number)
+function legendre_coeffs(f::Function, N::Number, pol::Function,b::Number,c::Number)
+    Nr =  Int(round((2*N-1)/2)) + 1
     x, w = gausslegendre(Nr)
 
     a = zeros(N+1)
@@ -896,22 +925,83 @@ function legendre_coeffs(f::Function, N::Number,Nr::Number, pol::Function,b::Num
 end
 
 """
-    legendreA(pol::Function,x::AbstractVector)
+    legendreA(N::Number,x::AbstractVector)
 
-    Given a precomputed legendre polynomial of degree N, pol; and a set of points x ⊂ [-1,1] of length M;
+    Given a number N which represents the degree of the polynomial, and a set of points x ⊂ [-1,1] of length M,
     this function generates a matrix A ∈ R^(MxN)
     
 """
 
-function legendreA(pol::Function, x::AbstractVector)
-    n = length(pol(first(x)))
+function legendreA(N::Number, x::AbstractVector)
+    pol = y -> legeBase(N,y)
+    n = length(pol(x[1]))
     return [pol(xi)[l] for xi in x, l in 1:n]
 end
 
-function legendreA(pol::Function, x::AbstractVector,a::Number,b::Number)
-    n = length(pol(first(x)))
-    g = x-> gInv(x,a,b;F=false)
-    return [pol(g(xi))[l] for xi in x, l in 1:n]
+"""
+    legendreA(N::Number,x::AbstractVector, G:Function)
+
+    Given a number N which represents the degree of the polynomial, a set of points x ⊂ [-1,1] of
+    length M, and a function G: [a,b] -> [-1,1], this function generates a matrix A ∈ R^(MxN)
+    
+"""
+
+function legendreA(N::Number, x::AbstractVector, G::Function)
+    pol = y -> legeBase(N,y)
+    n = length(pol(x[1]))
+    return [pol(G(xi))[l] for xi in x, l in 1:n]
+end
+
+"""
+    nLegDeriv(n::Int,x::Number,pol::Function)
+
+    Given the number of legendre polynomial, n; the evaluation point, x; and the vector of
+    legendre polynomials, pol; this function computes the derivative of the n Legendre polynomial
+"""
+
+function nLegDeriv(n::Int,x::Number,pol::Function)
+    N = length(pol(first(x)))
+    if x == 1
+        return n*(n+1)/2
+    elseif x == -1
+        return (-1)^(n+1)*n*(n+1)/2
+    else
+        # Since the arrays of polynomials starts with index i = 1 and the number of
+        # polynomials starts at n = 0, we define i = n + 1
+        i = n+1
+        if i==N
+            return (-n*x*pol(x)[i] + n *pol(x)[i-1])/(1-x^2)
+        else
+            return ((n+1)*x*pol(x)[i]-(n+1)*pol(x)[i+1])/(1-x^2)
+        end
+    end
+end
+
+"""
+    function deriv_legendre_pol(x::Number,pol::Function,a::Number,b::Number)
+
+    Given the evaluation point, x; a array with N Legendre polynomials, pol; and the
+    boundaries of a domain, [a,b]; this function computes the array of derivatives of the
+    Legendre polynomials in pol.
+"""
+
+function deriv_legendre_pol(x::Number,pol::Function,a::Number,b::Number)
+    # length of polynomial array
+    N = length(pol(x))
+    df = 2/(b-a)
+    p = zeros(N)
+    for n in 0:N-1
+        p[n+1] =df*nLegDeriv(n,x,pol)
+    end
+    return p
+end
+
+function legeMatrice(N::Number,bd::Tuple)
+    x,w = gausslegendre(N+1)
+    A = legenfreA(N,x)
+    W = (bd[6]-bd[5])/2 .*Diagonal(w)
+    D = Diagonal(ein"ji,jk,kl->il"(A,W,A))
+    return A,W,D
 end
 
 end # module
