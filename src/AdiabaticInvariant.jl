@@ -231,7 +231,7 @@ for Legendre polynomials. This function computes the gram matrices of each basis
 their corresponing adjoint matrices along with their additional matrices. In this case, additional
 matrices implies their weight matrix.
 """
-function gram_matrices(N::AbstractArray, bd::Tupple)
+function gram_matrices(N::AbstractArray, bd::Tuple)
     AF1, AF1T, DF1= fourMatrices(N[1])
     AF2, AF2T, DF2 = fourMatrices(N[2])
     AL, WL, DL = legebMatrices(N[3],bd)
@@ -998,7 +998,7 @@ end
 
 function legeMatrice(N::Number,bd::Tuple)
     x,w = gausslegendre(N+1)
-    A = legenfreA(N,x)
+    A = legendreA(N,x)
     W = (bd[6]-bd[5])/2 .*Diagonal(w)
     D = Diagonal(ein"ji,jk,kl->il"(A,W,A))
     return A,W,D
