@@ -234,7 +234,7 @@ matrices implies their weight matrix.
 function gram_matrices(N::AbstractArray, bd::Tuple)
     AF1, AF1T, DF1= fourMatrices(N[1])
     AF2, AF2T, DF2 = fourMatrices(N[2])
-    AL, WL, DL = legebMatrices(N[3],bd)
+    AL, WL, DL = legeMatrices(N[3],bd)
     return AF1T, DF1, AF2T, DF2, AL, WΨ
 end
 
@@ -650,11 +650,16 @@ end
 function DevChebBase(N::Integer, x::Number, a,b)
     θ = acos(x)
     v = zeros(N)
-    if x == 1 || x == -1
+    if x == 1
         for i in 0:(N-1)
             v[i + 1] = 2/(b - a)*i^2
         end
         return v
+    elseif x == -1
+        for i in 0:(N-1)
+            v[i + 1] = 2/(b - a)*(-1)^(i+1)*i^2
+        end
+        return b
     else
         for i in 0:(N-1)
             v[i + 1] = 2/(b - a)*i * sin(i*θ) / sin(θ)
@@ -823,7 +828,7 @@ function get_FGC(J,B; solver=Vern9())
         BB = B(u)
         UJ = p[1]^2*∇J[2]
         VJ = -p[1]^2*∇J[1]
-        DJ = BB/u[3]*(∇J[3] - p[1]*BB^(-1)*∇J[2])
+        DJ = BB/u[3]*(∇J[3] + p[1]*BB^(-1)*∇J[2])
         du[1] = UJ/DJ
         du[2] = VJ/DJ
         du[3] = 0
@@ -891,7 +896,7 @@ end
 """
 
 function legendre_coeffs(f::Function, N::Number, pol::Function)
-    Nr = Int(round((2*N-1)/2)) + 1
+    Nr = N+1
     x, w = gausslegendre(Nr)
 
     a = zeros(N+1)
@@ -912,7 +917,7 @@ end
 """
 
 function legendre_coeffs(f::Function, N::Number, pol::Function,b::Number,c::Number)
-    Nr =  Int(round((2*N-1)/2)) + 1
+    Nr =  N+1
     x, w = gausslegendre(Nr)
 
     a = zeros(N+1)
@@ -996,7 +1001,7 @@ function deriv_legendre_pol(x::Number,pol::Function,a::Number,b::Number)
     return p
 end
 
-function legeMatrice(N::Number,bd::Tuple)
+function legeMatrices(N::Number,bd::Tuple)
     x,w = gausslegendre(N+1)
     A = legendreA(N,x)
     W = (bd[6]-bd[5])/2 .*Diagonal(w)

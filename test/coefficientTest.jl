@@ -211,7 +211,7 @@ C4Φ4T = ein"mnp,pi,ij->mnj"(C4Φ4TΘ4T,Ψ4,inv(W4c))
 
 C4 = ein"mnp,ni,ij->mjp"(C4Φ4T,Θ4,inv(W4fy))
 
-C4test = coef_J(N,bd,y4ft;Lx = 2π, Ly = 2π)
+C4test = AdiabaticInvariant.coef_J(N,bd,y4ft;Lx = 2π, Ly = 2π)
 
 # Get Fourier by Fourier by Chebyshev reconstruction
 # Create vectors for basis functions
@@ -272,7 +272,7 @@ maximum(abs(Ψ4[a,i] - vz4(z4t[a])[i]) for a in eachindex(z4t), i in 1:Nz)
 ## Testing legendre functions
 
 function test_legendre(N::Number,x::AbstractArray,f::Function)
-    pol = x -> legendre_pol(N,x)
+    pol = x -> legeBase(N,x)
     a = AdiabaticInvariant.legendre_coeffs(f,N,pol)
     A = legendreA(pol,x)
     ft = ein"ij,j->i"(A,a)
