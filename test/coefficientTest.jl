@@ -11,8 +11,8 @@ using Polynomials
 # Define domain and parameters
 
 x_min, x_max = 0, 2π
-N = 11
-bd = tuple(x_min,x_max)
+N = 11 # this is the number of polinomial
+bd = tuple(x_min,x_max) # boundary of the problem
 
 # Define functions to use
 
@@ -87,7 +87,7 @@ ax2 = Axis(f2[1, 1], xlabel = "time", ylabel = "error",
 lines!(ax2, xs, abs.(y2.(xs) - yc.(xs)), label = "Error")
 f2
 
-# 2D Fourier by Chebyshev reconstruction test
+## 2D Fourier by Chebyshev reconstruction test
 # Test function: cos(x) + sin(y)
 
 # Define domain and parameters
@@ -149,7 +149,7 @@ f3
 maximum(abs(y3mn[a,b] - y3r(x3t[a], y3t[b]))
         for a in eachindex(x3t), b in eachindex(y3t))
 
-# 3D Fourier by Fourier by Chebyshev reconstruction test
+## 3D Fourier by Fourier by Chebyshev reconstruction test
 # Test function: cos(x) + sin(y) + cos(z)
 
 x_min, x_max = 0, 2π
@@ -274,14 +274,14 @@ maximum(abs(Ψ4[a,i] - vz4(z4t[a])[i]) for a in eachindex(z4t), i in 1:Nz)
 function test_legendre(N::Number,x::AbstractArray,f::Function)
     pol = x -> legeBase(N,x)
     a = AdiabaticInvariant.legendre_coeffs(f,N,pol)
-    A = legendreA(pol,x)
+    A = AdiabaticInvariant.legendreA(N,x)
     ft = ein"ij,j->i"(A,a)
     fv = [f(xi) for xi in x]
     err = abs.(ft .- fv)
     return err, x
 end
 
-err, x = test_legendre(21,30,0:0.01:0.5,x-> exp(x))
+err, x = test_legendre(21,0:0.01:0.5,x-> exp(x))
 
 fig = Figure()
 ax = Axis(fig[1,1],
@@ -297,11 +297,11 @@ fig
 ## Legendre polynomials in a [a,b] domain
 
 function test_legendre(N::Number,x::AbstractArray,f::Function,a::Number,b::Number)
-    pol = x -> AdiabaticInvariant.legendre_pol(N,x)
+    pol = x -> AdiabaticInvariant.legeBase(N,x)
     g = y-> AdiabaticInvariant.gInv(y,a,b;F = false)
     as = AdiabaticInvariant.legendre_coeffs(f,N,pol,a,b)
     println(as)
-    A = AdiabaticInvariant.legendreA(pol,g.(x))
+    A = AdiabaticInvariant.legendreA(N,g.(x))
     ft = ein"ij,j->i"(A,as)
     fv = [f(xi) for xi in x]
     err = abs.(ft .- fv)
@@ -323,11 +323,11 @@ fig1
 ## Derivatives of legendre polynomials
 
 function test_deriv_legendre(N::Number,x::AbstractArray,f::Function,a::Number,b::Number)
-    pol = x -> legendre_pol(N,x)
+    pol = x -> legeBase(N,x)
     g = y-> AdiabaticInvariant.gInv(y,a,b;F = false)
     deriv_pol = x-> AdiabaticInvariant.deriv_legendre_pol(x,pol,a,b)
     as = AdiabaticInvariant.legendre_coeffs(x->sin(x),N,pol,a,b)
-    A = AdiabaticInvariant.legendreA(deriv_pol,g.(x))
+    A = AdiabaticInvariant.legendreA(N,g.(x))
     ft = ein"ij,j->i"(A,as)
     fv = [f(xi) for xi in x]
     err = abs.(ft .- fv)

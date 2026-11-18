@@ -1,7 +1,7 @@
 module AdiabaticInvariant
 export JInvariant, slabJ, evaluate, full_J, get_eval_points, deval, numN, numNt, denomD,get_FFO, J_Dinamics, get_FGC
 export getJ
-export legendre_coeffs,legendre_pol,legendreA, gInv, deriv_legendre_pol
+export legendre_coeffs,legeBase,legendreA, gInv, deriv_legendre_pol
 export gTrans, gInv
 using OMEinsum
 using LinearAlgebra
@@ -235,7 +235,7 @@ function gram_matrices(N::AbstractArray, bd::Tuple)
     AF1, AF1T, DF1= fourMatrices(N[1])
     AF2, AF2T, DF2 = fourMatrices(N[2])
     AL, WL, DL = legeMatrices(N[3],bd)
-    return AF1T, DF1, AF2T, DF2, AL, WΨ
+    return AF1T, DF1, AF2T, DF2, AL, DL
 end
 
 
@@ -659,7 +659,7 @@ function DevChebBase(N::Integer, x::Number, a,b)
         for i in 0:(N-1)
             v[i + 1] = 2/(b - a)*(-1)^(i+1)*i^2
         end
-        return b
+        return v
     else
         for i in 0:(N-1)
             v[i + 1] = 2/(b - a)*i * sin(i*θ) / sin(θ)
